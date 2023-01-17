@@ -1,6 +1,8 @@
+
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
+#include <TinyGPSPlus.h>
 
 //Setting up Ultrasonic Sensor
 #define trigPin1 4
@@ -15,12 +17,12 @@
 #define trigPin4 13 //d7 trigger
 #define echoPin4 15 //d8 echo
 
-#define MIN_DISTANCE 20
-#define MAX_DISTANCE 80
+#define MIN_DISTANCE 20 //Total minimum distance of LeftSensor and RightSensor
+#define MAX_DISTANCE 80 //Total maximum distance of LeftSensor and RightSensor
+
+TinyGPSPlus gps;
 
 
-// #define trigPin3 9
-// #define echoPin3 10
 
 long duration, distance, RightSensor,BackSensor,FrontSensor,LeftSensor;
 
@@ -31,30 +33,30 @@ const char* password = "0137519887";
 //Initializing Bin Id
 const String bin_id = "1001";
 
-//Your Domain name with URL path or IP address with path
+//Waste Management WebApp config
 const String serverName = "http://103.253.145.174/api/";
 
 const String PATH_CREATE_LOG = "log/store?";
 const String PATH_UPDATE_BIN = "bin/update/" + bin_id + "?";
 
 
-String title, message, current_location , status , action ; 
+String title, message, current_location , status , action ,location_GPS; 
 
 // the following variables are unsigned longs because the time, measured in
 // milliseconds, will quickly become a bigger number than can be stored in an int.
 unsigned long lastTime = 0;
 unsigned long timerDelay = 1000;
 
-bool _25percent, _50percent, API_FULL_SENT ,API_FALL_SENT = false;
+bool API_FULL_SENT ,API_FALL_SENT = false;
 
 long TotalDistance, percentage , holdPercentage = 0 ; 
  
 
 void setup() {
   Serial.begin(115200);
+  Serial2.begin(115200);
 
-  //Start Setting up ultrasonic sensor 
-  pinMode(trigPin1, OUTPUT);
+  pinMode(trigPin1, OUTPUT);   //Start Setting up ultrasonic sensor 
   pinMode(echoPin1, INPUT);
 
   pinMode(trigPin2, OUTPUT);
@@ -64,29 +66,23 @@ void setup() {
   pinMode(echoPin3, INPUT);
 
   pinMode(trigPin4, OUTPUT);
-  pinMode(echoPin4, INPUT);
+  pinMode(echoPin4, INPUT);   //End Setting up ultrasonic sensor
 
-  //led
-  pinMode(LED_BUILTIN, OUTPUT);
 
-  //End Setting up ultrasonic sensor
+  pinMode(LED_BUILTIN, OUTPUT); //Setup built in LED.
 
-  //Setup GPS
-  // ss.begin(115200);
 
-  //Connect to wifi
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid, password);   //Connect to wifi 
   Serial.println("Connecting");
   while(WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-  }
-  //End connect to wifi
+  } 
+
 
   Serial.println("");
   Serial.print("Connected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
- 
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
 }
 
@@ -95,6 +91,10 @@ void loop() {
 
   //Send an HTTP POST request every 10 minutes
   if ((millis() - lastTime) > timerDelay) {
+    if (gps.encode(Serial2.read())){
+        location_GPS = String(gps.location.lat(), 6) + "," + (gps.location.lng(), 6);
+        displayInfo();
+    }
 
     //Detect the content inside the bin
     SonarSensor(trigPin1, echoPin1);
@@ -134,9 +134,9 @@ void loop() {
 
     if(API_FULL_SENT == false){
       if(percentage = 100){
-        title = "Waste is ready to collect (100% usage)" ; 
-        message = "Please collect the waste !" ; 
-        current_location = "Kuala Lumpur" ;
+        title = "Waste bin is ready to collect (100% usage)" ; 
+        message = "Please collect the waste" ; 
+        current_location = location_GPS ;
         status = "FULL";
         action = PATH_CREATE_LOG;
         call_API(title, message, current_location , status, bin_id,action);
@@ -153,15 +153,15 @@ void loop() {
 
     if(API_FALL_SENT == true) {
       if(BackSensor > 70 && FrontSensor > 70){
-        API_FALL_SENT = false;  //Reset API_FALL_SENT gate 
+        API_FALL_SENT = false;  //Reset API_FALL_SENT gate when the bin is restored.
       }
     }
 
     if(API_FALL_SENT == false){
       if(BackSensor <= 5 || FrontSensor <= 5){
-          title = "Dumpster fall" ; 
+          title = "Waste bin fall" ; 
           message = "Please send help" ; 
-          current_location = "Kuala Lumpur" ;
+          current_location = location_GPS ;
           status = "FALL";
           action = PATH_CREATE_LOG;
           call_API(title, message, current_location , status, bin_id,action);
@@ -170,9 +170,8 @@ void loop() {
       }
     }
 
-    //Update bin content ;
     String get_percentage = String(percentage);
-    update_content(get_percentage, PATH_UPDATE_BIN);
+    update_content(get_percentage, PATH_UPDATE_BIN); // Update content with API request
     lastTime = millis();
   }
 }
@@ -239,3 +238,26 @@ void update_content(String percentage, String action){
       http.end();
 }
 
+void updateSerial(){
+  delay(500);
+  while (Serial.available())  {
+    Serial2.write(Serial.read());//Forward what Serial received to Software Serial Port
+  }
+  while (Serial2.available())  {
+    Serial.write(Serial2.read());//Forward what Software Serial received to Serial Port
+  }
+}
+
+void displayInfo()
+{
+  Serial.print(F("Location: "));
+  if (gps.location.isValid()){
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+}
