@@ -1,3 +1,5 @@
+// Code by Aqil, Khai, Nasim
+// https://github.com/aqilanwar/waste-management-iot
 
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -42,10 +44,9 @@ const String PATH_UPDATE_BIN = "bin/update/" + bin_id + "?";
 
 String title, message, current_location , status , action ,location_GPS; 
 
-// the following variables are unsigned longs because the time, measured in
-// milliseconds, will quickly become a bigger number than can be stored in an int.
+
 unsigned long lastTime = 0;
-unsigned long timerDelay = 1000;
+unsigned long timerDelay = 1000; // Initialized delay to read input.
 
 bool API_FULL_SENT ,API_FALL_SENT = false;
 
@@ -89,7 +90,7 @@ void setup() {
 void loop() {
   //Get Location
 
-  //Send an HTTP POST request every 10 minutes
+  //Delay every input for 5 seconds.
   if ((millis() - lastTime) > timerDelay) {
     if (gps.encode(Serial2.read())){
         location_GPS = String(gps.location.lat(), 6) + "," + (gps.location.lng(), 6);
