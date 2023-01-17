@@ -31,7 +31,7 @@ const char* ssid = "0108-2.4G";
 const char* password = "0137519887";
 
 //Initializing Bin Id
-const String bin_id = "1001";
+const String bin_id = "SWM-47500-1";
 
 //Waste Management WebApp config
 const String serverName = "http://103.253.145.174/api/";
